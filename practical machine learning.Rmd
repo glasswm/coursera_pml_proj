@@ -1,0 +1,68 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "wm"
+date: "2016年1月30日"
+output: html_document
+---
+
+In this project, we have got data(data source:<http://groupware.les.inf.puc-rio.br/har>) from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set.
+My report will show how I built my model, and I will also use my prediction model to predict 20 different test cases.
+
+
+##Loading Library
+```{r, message=FALSE}
+library(caret)
+```
+
+##Download the Data
+```{r, cache=TRUE}
+trainDataUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testDataUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainDataFile <- "~/Desktop/pml-training.csv"
+testDataFile  <- "~/Desktop/pml-testing.csv"
+
+if (!file.exists(trainDataFile)) {
+  download.file(trainDataUrl, trainDataFile)
+}
+if (!file.exists(testDataFile)) {
+  download.file(testDataUrl, testDataFile)
+}
+trainData <- read.csv(trainDataFile)
+testData <- read.csv(testDataFile)
+```
+
+##Data Preprocess
+After **head(trainData) **, we can see there are many NA columns. We remove the columns that have more than 60% NAs.
+```{r, cache=TRUE, message=FALSE}
+trainData[trainData==""] <- NA
+columns_noNA <- sapply(colnames(trainData), 
+                       function(x) if(sum(is.na(trainData[, x])) > 0.60*nrow(trainData)) 
+                       { return(FALSE) } else { return(TRUE) })
+
+trainData <- trainData[, columns_noNA]
+```
+We also know that columns like `X,user_name,raw_timestamp_part_1, ...` etc have no affects, so we remove them too.
+```{r}
+trainData <- trainData[, -(1:7)]
+```
+
+##Create Model
+We use **decision tree**,**boosting**,**random forest** to create our model.We use cross validation to avoid overfitting.
+```{r, cache=TRUE, message=FALSE}
+tc <- trainControl(method = "cv", number = 5, preProcOptions="pca", verboseIter=FALSE, allowParallel=TRUE)
+fit_rpart <- train(classe ~ ., data = trainData, method = "rpart", trControl= tc)
+fit_gbm <- train(classe ~ ., data = trainData, method="gbm", trControl= tc, verbose=FALSE)
+fit_rf <- train(classe ~ ., data = trainData, method = "rf", trControl= tc, ntree=250)
+
+```
+The accuracy of the models are:
+```{r}
+model_names <- c("rpart", "boosting", "random forest")
+model_accuracy <- c(max(fit_rpart$results$Accuracy), max(fit_gbm$results$Accuracy), max(fit_rf$results$Accuracy))
+cbind(model_names,model_accuracy)
+```
+##Prediction
+Random forest get best accuracy and will be used in predicting. The result is shown below.
+```{r}
+predict(fit_rf, testData)
+```
